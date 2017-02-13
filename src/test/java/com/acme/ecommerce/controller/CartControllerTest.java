@@ -1,24 +1,33 @@
 package com.acme.ecommerce.controller;
 
-import com.acme.ecommerce.Application;
+import static com.acme.ecommerce.FlashMessage.Status.SUCCESS;
+import static org.hamcrest.Matchers.equalTo;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
+
+import com.acme.ecommerce.FlashMessage;
 import com.acme.ecommerce.domain.Product;
 import com.acme.ecommerce.domain.ProductPurchase;
 import com.acme.ecommerce.domain.Purchase;
 import com.acme.ecommerce.domain.ShoppingCart;
+import com.acme.ecommerce.exceptions.OrderQuantityExceedsStockException;
 import com.acme.ecommerce.service.ProductService;
 import com.acme.ecommerce.service.PurchaseService;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.boot.test.SpringApplicationConfiguration;
 import org.springframework.mock.web.MockHttpSession;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
-import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.view.InternalResourceViewResolver;
 
@@ -26,13 +35,9 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
-@RunWith(SpringJUnit4ClassRunner.class)
-@SpringApplicationConfiguration(classes = Application.class)
-@WebAppConfiguration
+//@RunWith(SpringJUnit4ClassRunner.class)
+//@SpringApplicationConfiguration(classes = Application.class)
+//@WebAppConfiguration
 public class CartControllerTest {
 
 	final String BASE_URL = "http://localhost:8080/";
@@ -51,9 +56,9 @@ public class CartControllerTest {
 
 	private MockMvc mockMvc;
 
-	static {
-		System.setProperty("properties.home", "properties");
-	}
+	//static {
+	//	System.setProperty("properties.home", "/Development WorkSpace/IntelliJ IDEA workSpace/techdegree-javaweb-ecommerce_V2/techdegree-javaweb-ecommerce-master");
+	//}
 
 	@Before
 	public void setup() {
@@ -97,7 +102,22 @@ public class CartControllerTest {
 		mockMvc.perform(MockMvcRequestBuilders.post("/cart/add").param("quantity", "1").param("productId", "1"))
 				.andDo(print())
 				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/product/"));
+				.andExpect(redirectedUrl("/product/"))
+				.andExpect(flash().attributeExists("flash"))
+				.andExpect(flash().attribute("flash", equalTo(new FlashMessage("Added 1 of " + product.getName() + " to cart", SUCCESS))));
+	}
+
+	@Test
+	public void successfulAddToCartShowSuccessFlashMessageTest() throws Exception {
+		Product product = productBuilder();
+
+		when(productService.findById(1L)).thenReturn(product);
+
+		mockMvc.perform(MockMvcRequestBuilders.post("/cart/add").param("quantity", "1").param("productId", "1"))
+				.andDo(print())
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/product/"))
+				.andExpect(MockMvcResultMatchers.flash().attributeExists("flash"));
 	}
 
 	@Test
@@ -123,7 +143,8 @@ public class CartControllerTest {
 		mockMvc.perform(MockMvcRequestBuilders.post("/cart/update").param("newQuantity", "2").param("productId", "1"))
 				.andDo(print())
 				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/cart"));
+				.andExpect(redirectedUrl("/cart"))
+				.andExpect(MockMvcResultMatchers.flash().attributeExists("flash"));
 	}
 
 	@Test
@@ -180,7 +201,8 @@ public class CartControllerTest {
 
 		mockMvc.perform(MockMvcRequestBuilders.post("/cart/remove").param("productId", "1")).andDo(print())
 				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/cart"));
+				.andExpect(redirectedUrl("/cart"))
+				.andExpect(MockMvcResultMatchers.flash().attributeExists("flash"));
 	}
 
 	@Test
@@ -252,7 +274,8 @@ public class CartControllerTest {
 
 		mockMvc.perform(MockMvcRequestBuilders.post("/cart/empty")).andDo(print())
 				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/product/"));
+				.andExpect(redirectedUrl("/product/"))
+				.andExpect(MockMvcResultMatchers.flash().attributeExists("flash"));
 	}
 
 	@Test
@@ -263,6 +286,18 @@ public class CartControllerTest {
 		mockMvc.perform(MockMvcRequestBuilders.post("/cart/empty")).andDo(print())
 				.andExpect(status().is3xxRedirection())
 				.andExpect(redirectedUrl("/error"));
+	}
+
+	@Test(expected = OrderQuantityExceedsStockException.class)
+	public void exceedingQuantityInStockThrowsException() throws Exception {
+		Product product = productBuilder();
+		doAnswer(invocation -> {
+			if(product.getQuantity() < 5) {
+				throw new OrderQuantityExceedsStockException(product);
+			}
+			return null;
+		}).when(productService).checkAvailability(any(Product.class), any(Integer.class));
+		productService.checkAvailability(product, 5);
 	}
 
 	private Product productBuilder() {

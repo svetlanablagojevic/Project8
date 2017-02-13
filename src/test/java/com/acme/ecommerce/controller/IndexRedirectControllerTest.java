@@ -1,5 +1,8 @@
 package com.acme.ecommerce.controller;
 
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.acme.ecommerce.Application;
 import org.junit.Before;
 import org.junit.Test;
@@ -12,9 +15,6 @@ import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringApplicationConfiguration(classes = Application.class)
@@ -29,7 +29,7 @@ public class IndexRedirectControllerTest {
 	 private MockMvc mockMvc;
 
 	 static {
-		 System.setProperty("properties.home", "properties");
+		 System.setProperty("properties.home", "/Development WorkSpace/IntelliJ IDEA workSpace/techdegree-javaweb-ecommerce_V2/techdegree-javaweb-ecommerce-master");
 	 }
 	 
 	 @Before

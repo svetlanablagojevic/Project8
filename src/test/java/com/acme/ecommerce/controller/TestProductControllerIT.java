@@ -1,5 +1,7 @@
 package com.acme.ecommerce.controller;
 
+import static org.fest.assertions.Assertions.assertThat;
+
 import com.acme.ecommerce.Application;
 import com.acme.ecommerce.config.PersistenceConfig;
 import com.gargoylesoftware.htmlunit.WebClient;
@@ -21,8 +23,6 @@ import org.springframework.web.context.WebApplicationContext;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 
-import static org.fest.assertions.Assertions.assertThat;
-
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringApplicationConfiguration(classes = {Application.class, PersistenceConfig.class})
 @WebIntegrationTest
@@ -40,7 +40,7 @@ public class TestProductControllerIT {
 	WebClient webClient;
 	
 	 static {
-		 System.setProperty("properties.home", "properties");
+		 System.setProperty("properties.home", "/Development WorkSpace/IntelliJ IDEA workSpace/techdegree-javaweb-ecommerce_V2/techdegree-javaweb-ecommerce-master");
 	 }
 
 	@Before
@@ -57,7 +57,7 @@ public class TestProductControllerIT {
 
 	@Test
 	public void ProductDetailAddItemIntegrationTest() throws Exception {
-		HtmlPage productPage = webClient.getPage("http://localhost:8080/product/detail/" + PRODUCT_ID);
+		HtmlPage productPage = webClient.getPage("http://localhost:8079/product/detail/" + PRODUCT_ID);
 		String productName = productPage.getHtmlElementById("productName").getTextContent();
 		String productPrice = productPage.getHtmlElementById("productPrice").getTextContent();
 		String productDesc = productPage.getHtmlElementById("productDescription").getTextContent();

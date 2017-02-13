@@ -1,7 +1,24 @@
 package com.acme.ecommerce.controller;
 
+import static com.acme.ecommerce.FlashMessage.Status.FAILURE;
+import static com.acme.ecommerce.FlashMessage.Status.SUCCESS;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasProperty;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
+
 import com.acme.ecommerce.Application;
-import com.acme.ecommerce.domain.*;
+import com.acme.ecommerce.FlashMessage;
+import com.acme.ecommerce.domain.CouponCode;
+import com.acme.ecommerce.domain.Product;
+import com.acme.ecommerce.domain.ProductPurchase;
+import com.acme.ecommerce.domain.Purchase;
+import com.acme.ecommerce.domain.ShoppingCart;
 import com.acme.ecommerce.service.ProductService;
 import com.acme.ecommerce.service.PurchaseService;
 import org.junit.Before;
@@ -22,300 +39,314 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasProperty;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringApplicationConfiguration(classes = Application.class)
 @WebAppConfiguration
 public class CheckoutControllerTest {
 
-	final String BASE_URL = "http://localhost:8080/";
+  final String BASE_URL = "http://localhost:8080/";
 
-	@Mock
-	private MockHttpSession session;
+  @Mock
+  private MockHttpSession session;
 
-	@Mock
-	private ProductService productService;
-	@Mock
-	private PurchaseService purchaseService;
-	@Mock
-	private ShoppingCart sCart;
-	@InjectMocks
-	private CheckoutController checkoutController;
+  @Mock
+  private ProductService productService;
+  @Mock
+  private PurchaseService purchaseService;
+  @Mock
+  private ShoppingCart sCart;
+  @InjectMocks
+  private CheckoutController checkoutController;
 
-	private MockMvc mockMvc;
+  private MockMvc mockMvc;
 
-	static {
-		System.setProperty("properties.home", "properties");
-	}
+  static {
+    System.setProperty("properties.home",
+        "/Development WorkSpace/IntelliJ IDEA workSpace/techdegree-javaweb-ecommerce_V2/techdegree-javaweb-ecommerce-master");
+  }
 
-	@Before
-	public void setup() {
-		MockitoAnnotations.initMocks(this);
-		mockMvc = MockMvcBuilders.standaloneSetup(checkoutController).build();
-	}
+  @Before
+  public void setup() {
+    MockitoAnnotations.initMocks(this);
+    mockMvc = MockMvcBuilders.standaloneSetup(checkoutController).build();
+  }
 
-	@Test
-	public void couponTest() throws Exception {
-		Product product = productBuilder();
+  @Test
+  public void couponTest() throws Exception {
+    Product product = productBuilder();
 
-		when(productService.findById(1L)).thenReturn(product);
+    when(productService.findById(1L)).thenReturn(product);
 
-		Purchase purchase = purchaseBuilder(product);
+    Purchase purchase = purchaseBuilder(product);
 
-		when(sCart.getPurchase()).thenReturn(purchase);
-		mockMvc.perform(MockMvcRequestBuilders.get("/checkout/coupon")).andDo(print()).andExpect(status().isOk())
-				.andExpect(view().name("checkout_1"));
-	}
+    when(sCart.getPurchase()).thenReturn(purchase);
+    mockMvc.perform(MockMvcRequestBuilders.get("/checkout/coupon")).andDo(print())
+        .andExpect(status().isOk())
+        .andExpect(view().name("checkout_1"));
+  }
 
-	@Test
-	public void noCartCouponTest() throws Exception {
-		when(sCart.getPurchase()).thenReturn(null);
-		mockMvc.perform(MockMvcRequestBuilders.get("/checkout/coupon")).andDo(print())
-				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/error"));
-	}
+  @Test
+  public void invalidCouponCodeRedirectToCoupon() throws Exception {
+    mockMvc.perform(post("/checkout/coupon").param("code", "abcd"))
+        .andExpect(redirectedUrl("coupon"))
+        .andExpect(flash().attribute("flash", equalTo(new FlashMessage("Invalid coupon code. Must be between 5 and 10 characters", FAILURE))));
+  }
 
-	@Test
-	public void postCouponTest() throws Exception {
-		mockMvc.perform(MockMvcRequestBuilders.post("/checkout/coupon").param("couponCode", "abcd")).andDo(print())
-				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("shipping"));
-	}
+  @Test
+  public void noCartCouponTest() throws Exception {
+    when(sCart.getPurchase()).thenReturn(null);
+    mockMvc.perform(MockMvcRequestBuilders.get("/checkout/coupon")).andDo(print())
+        .andExpect(status().is3xxRedirection())
+        .andExpect(redirectedUrl("/error"));
+  }
 
-	@Test
-	public void shippingTest() throws Exception {
-		Product product = productBuilder();
+  @Test
+  public void postCouponTest() throws Exception {
+    mockMvc.perform(post("/checkout/coupon").param("code", "abcde")).andDo(print())
+        .andExpect(status().is3xxRedirection())
+        .andExpect(redirectedUrl("coupon"))
+        .andExpect(flash().attribute("flash", equalTo(new FlashMessage("Coupon applied!", SUCCESS))));
 
-		when(productService.findById(1L)).thenReturn(product);
+  }
 
-		Purchase purchase = purchaseBuilder(product);
-		when(sCart.getPurchase()).thenReturn(purchase);
+  @Test
+  public void shippingTest() throws Exception {
+    Product product = productBuilder();
 
-		CouponCode coupon = new CouponCode();
-		coupon.setCode("abcd");
-		when(sCart.getCouponCode()).thenReturn(coupon);
+    when(productService.findById(1L)).thenReturn(product);
 
-		mockMvc.perform(MockMvcRequestBuilders.get("/checkout/shipping")).andDo(print())
-			.andExpect(status().isOk())
-			.andExpect(view().name("checkout_2"));
-	}
-	
-	@Test
-	public void noCartShippingTest() throws Exception {
-		when(sCart.getPurchase()).thenReturn(null);
-		mockMvc.perform(MockMvcRequestBuilders.get("/checkout/shipping")).andDo(print())
-				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/error"));
-	}
+    Purchase purchase = purchaseBuilder(product);
+    when(sCart.getPurchase()).thenReturn(purchase);
 
-	@Test
-	public void postShippingTestValidationSuccess() throws Exception {
+    CouponCode coupon = new CouponCode();
+    coupon.setCode("abcd");
+    when(sCart.getCouponCode()).thenReturn(coupon);
 
-		Product product = productBuilder();
+    mockMvc.perform(MockMvcRequestBuilders.get("/checkout/shipping")).andDo(print())
+        .andExpect(status().isOk())
+        .andExpect(view().name("checkout_2"));
+  }
 
-		when(productService.findById(1L)).thenReturn(product);
+  @Test
+  public void noCartShippingTest() throws Exception {
+    when(sCart.getPurchase()).thenReturn(null);
+    mockMvc.perform(MockMvcRequestBuilders.get("/checkout/shipping")).andDo(print())
+        .andExpect(status().is3xxRedirection())
+        .andExpect(redirectedUrl("/error"));
+  }
 
-		Purchase purchase = purchaseBuilder(product);
-		when(sCart.getPurchase()).thenReturn(purchase);
+  @Test
+  public void postShippingTestValidationSuccess() throws Exception {
 
-		CouponCode coupon = new CouponCode();
-		coupon.setCode("abcd");
-		when(sCart.getCouponCode()).thenReturn(coupon);
+    Product product = productBuilder();
 
-		when(purchaseService.save(purchase)).thenReturn(purchase);
+    when(productService.findById(1L)).thenReturn(product);
 
-		mockMvc.perform(MockMvcRequestBuilders.post("/checkout/shipping").param("firstName", "john")
-				.param("lastName", "smith").param("streetAddress", "123 main st.").param("city", "centerville")
-				.param("state", "WA").param("zipCode", "12345").param("country", "USA")
-				.param("phoneNumber", "1234567890").param("email", "ab@c.com")).andDo(print())
-				.andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("billing"));
-	}
-	
-	@Test
-	public void postShippingTestValidationFail() throws Exception {
+    Purchase purchase = purchaseBuilder(product);
+    when(sCart.getPurchase()).thenReturn(purchase);
 
-		Product product = productBuilder();
+    CouponCode coupon = new CouponCode();
+    coupon.setCode("abcd");
+    when(sCart.getCouponCode()).thenReturn(coupon);
 
-		when(productService.findById(1L)).thenReturn(product);
+    when(purchaseService.save(purchase)).thenReturn(purchase);
 
-		Purchase purchase = purchaseBuilder(product);
-		when(sCart.getPurchase()).thenReturn(purchase);
+    mockMvc.perform(post("/checkout/shipping").param("firstName", "john")
+        .param("lastName", "smith").param("streetAddress", "123 main st.")
+        .param("city", "centerville")
+        .param("state", "WA").param("zipCode", "12345").param("country", "USA")
+        .param("phoneNumber", "1234567890").param("email", "ab@c.com")).andDo(print())
+        .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("billing"));
+  }
 
-		CouponCode coupon = new CouponCode();
-		coupon.setCode("abcd");
-		when(sCart.getCouponCode()).thenReturn(coupon);
+  @Test
+  public void postShippingTestValidationFail() throws Exception {
 
-		when(purchaseService.save(purchase)).thenReturn(purchase);
+    Product product = productBuilder();
 
-		mockMvc.perform(MockMvcRequestBuilders.post("/checkout/shipping")).andDo(print())
-				.andExpect(flash().attribute("org.springframework.validation.BindingResult.shippingAddress",
-						hasProperty("fieldErrorCount", equalTo(9))))
-				.andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("shipping"));
-	}
-	
-	@Test
-	public void noCartPostShippingTest() throws Exception {
-		when(sCart.getPurchase()).thenReturn(null);
-		mockMvc.perform(MockMvcRequestBuilders.post("/checkout/shipping").param("firstName", "john")
-				.param("lastName", "smith").param("streetAddress", "123 main st.").param("city", "centerville")
-				.param("state", "WA").param("zipCode", "12345").param("country", "USA")
-				.param("phoneNumber", "1234567890").param("email", "ab@c.com")).andDo(print())
-				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/error"));
-	}
+    when(productService.findById(1L)).thenReturn(product);
 
-	@Test
-	public void billingTest() throws Exception {
-		Product product = productBuilder();
+    Purchase purchase = purchaseBuilder(product);
+    when(sCart.getPurchase()).thenReturn(purchase);
 
-		when(productService.findById(1L)).thenReturn(product);
+    CouponCode coupon = new CouponCode();
+    coupon.setCode("abcd");
+    when(sCart.getCouponCode()).thenReturn(coupon);
 
-		Purchase purchase = purchaseBuilder(product);
-		when(sCart.getPurchase()).thenReturn(purchase);
+    when(purchaseService.save(purchase)).thenReturn(purchase);
 
-		CouponCode coupon = new CouponCode();
-		coupon.setCode("abcd");
-		when(sCart.getCouponCode()).thenReturn(coupon);
+    mockMvc.perform(post("/checkout/shipping")).andDo(print())
+        .andExpect(flash().attribute("org.springframework.validation.BindingResult.shippingAddress",
+            hasProperty("fieldErrorCount", equalTo(9))))
+        .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("shipping"));
+  }
 
-		when(purchaseService.save(purchase)).thenReturn(purchase);
+  @Test
+  public void noCartPostShippingTest() throws Exception {
+    when(sCart.getPurchase()).thenReturn(null);
+    mockMvc.perform(post("/checkout/shipping").param("firstName", "john")
+        .param("lastName", "smith").param("streetAddress", "123 main st.")
+        .param("city", "centerville")
+        .param("state", "WA").param("zipCode", "12345").param("country", "USA")
+        .param("phoneNumber", "1234567890").param("email", "ab@c.com")).andDo(print())
+        .andExpect(status().is3xxRedirection())
+        .andExpect(redirectedUrl("/error"));
+  }
 
-		mockMvc.perform(MockMvcRequestBuilders.get("/checkout/billing")).andDo(print())
-			.andExpect(status().isOk())
-			.andExpect(view().name("checkout_3"));
-	}
-	
-	@Test
-	public void noCartBillingTest() throws Exception {
-		when(sCart.getPurchase()).thenReturn(null);
-		mockMvc.perform(MockMvcRequestBuilders.get("/checkout/billing")).andDo(print())
-			.andExpect(status().is3xxRedirection())
-			.andExpect(redirectedUrl("/error"));
-	}
+  @Test
+  public void billingTest() throws Exception {
+    Product product = productBuilder();
 
-	@Test
-	public void postBillingTestValidationSuccess() throws Exception {
-		Product product = productBuilder();
+    when(productService.findById(1L)).thenReturn(product);
 
-		when(productService.findById(1L)).thenReturn(product);
+    Purchase purchase = purchaseBuilder(product);
+    when(sCart.getPurchase()).thenReturn(purchase);
 
-		Purchase purchase = purchaseBuilder(product);
-		when(sCart.getPurchase()).thenReturn(purchase);
+    CouponCode coupon = new CouponCode();
+    coupon.setCode("abcd");
+    when(sCart.getCouponCode()).thenReturn(coupon);
 
-		CouponCode coupon = new CouponCode();
-		coupon.setCode("abcd");
-		when(sCart.getCouponCode()).thenReturn(coupon);
+    when(purchaseService.save(purchase)).thenReturn(purchase);
 
-		when(purchaseService.save(purchase)).thenReturn(purchase);
+    mockMvc.perform(MockMvcRequestBuilders.get("/checkout/billing")).andDo(print())
+        .andExpect(status().isOk())
+        .andExpect(view().name("checkout_3"));
+  }
 
-		mockMvc.perform(MockMvcRequestBuilders.post("/checkout/billing").param("firstName", "john")
-				.param("lastName", "smith").param("streetAddress", "123 main st.").param("city", "centerville")
-				.param("state", "WA").param("zipCode", "12345").param("country", "USA")
-				.param("phoneNumber", "1234567890").param("email", "ab@c.com")
-				.param("creditCardNumber", "1234567890123456").param("creditCardName", "john smith")
-				.param("creditCardExpMonth", "5").param("creditCardExpYear", "2016").param("creditCardCVC", "123")
-				.param("billingAddressSame", "false")).andDo(print())
-			.andExpect(status().is3xxRedirection())
-			.andExpect(redirectedUrl("confirmation"));
-	}
+  @Test
+  public void noCartBillingTest() throws Exception {
+    when(sCart.getPurchase()).thenReturn(null);
+    mockMvc.perform(MockMvcRequestBuilders.get("/checkout/billing")).andDo(print())
+        .andExpect(status().is3xxRedirection())
+        .andExpect(redirectedUrl("/error"));
+  }
 
-	@Test
-	public void postBillingTestValidationFail() throws Exception {
-		Product product = productBuilder();
+  @Test
+  public void postBillingTestValidationSuccess() throws Exception {
+    Product product = productBuilder();
 
-		when(productService.findById(1L)).thenReturn(product);
+    when(productService.findById(1L)).thenReturn(product);
 
-		Purchase purchase = purchaseBuilder(product);
-		when(sCart.getPurchase()).thenReturn(purchase);
+    Purchase purchase = purchaseBuilder(product);
+    when(sCart.getPurchase()).thenReturn(purchase);
 
-		CouponCode coupon = new CouponCode();
-		coupon.setCode("abcd");
-		when(sCart.getCouponCode()).thenReturn(coupon);
+    CouponCode coupon = new CouponCode();
+    coupon.setCode("abcd");
+    when(sCart.getCouponCode()).thenReturn(coupon);
 
-		when(purchaseService.save(purchase)).thenReturn(purchase);
-		mockMvc.perform(MockMvcRequestBuilders.post("/checkout/billing")).andDo(print())
-				.andExpect(flash().attribute("org.springframework.validation.BindingResult.billingObject",
-						hasProperty("fieldErrorCount", equalTo(14))))
-				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("billing"));
-	}
-	
-	@Test
-	public void noCartPostBillingTest() throws Exception {
-		when(sCart.getPurchase()).thenReturn(null);
-		mockMvc.perform(MockMvcRequestBuilders.post("/checkout/billing").param("firstName", "john")
-				.param("lastName", "smith").param("streetAddress", "123 main st.").param("city", "centerville")
-				.param("state", "WA").param("zipCode", "12345").param("country", "USA")
-				.param("phoneNumber", "1234567890").param("email", "ab@c.com")
-				.param("creditCardNumber", "1234567890123456").param("creditCardName", "john smith")
-				.param("creditCardExpMonth", "5").param("creditCardExpYear", "2016").param("creditCardCVC", "123")
-				.param("billingAddressSame", "false")).andDo(print())
-				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/error"));
-	}
+    when(purchaseService.save(purchase)).thenReturn(purchase);
 
-	@Test
-	public void confirmationTest() throws Exception {
-		Product product = productBuilder();
+    mockMvc.perform(post("/checkout/billing").param("firstName", "john")
+        .param("lastName", "smith").param("streetAddress", "123 main st.")
+        .param("city", "centerville")
+        .param("state", "WA").param("zipCode", "12345").param("country", "USA")
+        .param("phoneNumber", "1234567890").param("email", "ab@c.com")
+        .param("creditCardNumber", "1234567890123456").param("creditCardName", "john smith")
+        .param("creditCardExpMonth", "5").param("creditCardExpYear", "2016")
+        .param("creditCardCVC", "123")
+        .param("billingAddressSame", "false")).andDo(print())
+        .andExpect(status().is3xxRedirection())
+        .andExpect(redirectedUrl("confirmation"));
+  }
 
-		when(productService.findById(1L)).thenReturn(product);
+  @Test
+  public void postBillingTestValidationFail() throws Exception {
+    Product product = productBuilder();
 
-		Purchase purchase = purchaseBuilder(product);
-		when(sCart.getPurchase()).thenReturn(purchase);
+    when(productService.findById(1L)).thenReturn(product);
 
-		CouponCode coupon = new CouponCode();
-		coupon.setCode("abcd");
-		when(sCart.getCouponCode()).thenReturn(coupon);
+    Purchase purchase = purchaseBuilder(product);
+    when(sCart.getPurchase()).thenReturn(purchase);
 
-		when(purchaseService.save(purchase)).thenReturn(purchase);
+    CouponCode coupon = new CouponCode();
+    coupon.setCode("abcd");
+    when(sCart.getCouponCode()).thenReturn(coupon);
 
-		mockMvc.perform(MockMvcRequestBuilders.get("/checkout/confirmation")).andDo(print())
-			.andExpect(status().isOk())
-			.andExpect(view().name("order_confirmation"));
-	}
-	
-	@Test
-	public void noCartConfirmationTest() throws Exception {
-		when(sCart.getPurchase()).thenReturn(null);
-		mockMvc.perform(MockMvcRequestBuilders.get("/checkout/confirmation")).andDo(print())
-			.andExpect(status().is3xxRedirection())
-			.andExpect(redirectedUrl("/error"));
-	}
+    when(purchaseService.save(purchase)).thenReturn(purchase);
+    mockMvc.perform(post("/checkout/billing")).andDo(print())
+        .andExpect(flash().attribute("org.springframework.validation.BindingResult.billingObject",
+            hasProperty("fieldErrorCount", equalTo(14))))
+        .andExpect(status().is3xxRedirection())
+        .andExpect(redirectedUrl("billing"));
+  }
 
-	@Test
-	public void emailTest() throws Exception {
-		//unfortunately it is not possible to mock the Thymeleaf Template Engine (final methods problem) which is known and will be fixed in 3.0
-		//so all we test is that the endpoint is accessible.
-		mockMvc.perform(MockMvcRequestBuilders.get("/checkout/email")).andDo(print()).andExpect(status().isOk());
-	}
+  @Test
+  public void noCartPostBillingTest() throws Exception {
+    when(sCart.getPurchase()).thenReturn(null);
+    mockMvc.perform(post("/checkout/billing").param("firstName", "john")
+        .param("lastName", "smith").param("streetAddress", "123 main st.")
+        .param("city", "centerville")
+        .param("state", "WA").param("zipCode", "12345").param("country", "USA")
+        .param("phoneNumber", "1234567890").param("email", "ab@c.com")
+        .param("creditCardNumber", "1234567890123456").param("creditCardName", "john smith")
+        .param("creditCardExpMonth", "5").param("creditCardExpYear", "2016")
+        .param("creditCardCVC", "123")
+        .param("billingAddressSame", "false")).andDo(print())
+        .andExpect(status().is3xxRedirection())
+        .andExpect(redirectedUrl("/error"));
+  }
 
-	private Product productBuilder() {
-		Product product = new Product();
-		product.setId(1L);
-		product.setDesc("TestDesc");
-		product.setName("TestName");
-		product.setPrice(new BigDecimal(1.99));
-		product.setQuantity(3);
-		product.setFullImageName("imagename");
-		product.setThumbImageName("imagename");
-		return product;
-	}
-	
-	private Purchase purchaseBuilder(Product product) {
-		ProductPurchase pp = new ProductPurchase();
-		pp.setProductPurchaseId(1L);
-		pp.setQuantity(1);
-		pp.setProduct(product);
-		List<ProductPurchase> ppList = new ArrayList<ProductPurchase>();
-		ppList.add(pp);
+  @Test
+  public void confirmationTest() throws Exception {
+    Product product = productBuilder();
 
-		Purchase purchase = new Purchase();
-		purchase.setId(1L);
-		purchase.setProductPurchases(ppList);
-		return purchase;
-	}
+    when(productService.findById(1L)).thenReturn(product);
+
+    Purchase purchase = purchaseBuilder(product);
+    purchase.setCreditCardNumber("1234567898765432");
+    when(sCart.getPurchase()).thenReturn(purchase);
+
+    CouponCode coupon = new CouponCode();
+    coupon.setCode("abcd");
+    when(sCart.getCouponCode()).thenReturn(coupon);
+
+    when(purchaseService.save(purchase)).thenReturn(purchase);
+
+    mockMvc.perform(MockMvcRequestBuilders.get("/checkout/confirmation")).andDo(print())
+        .andExpect(status().isOk())
+        .andExpect(view().name("order_confirmation"));
+  }
+
+  @Test
+  public void noCartConfirmationTest() throws Exception {
+    when(sCart.getPurchase()).thenReturn(null);
+    mockMvc.perform(MockMvcRequestBuilders.get("/checkout/confirmation")).andDo(print())
+        .andExpect(status().is3xxRedirection())
+        .andExpect(redirectedUrl("/error"));
+  }
+
+  @Test
+  public void emailTest() throws Exception {
+    //unfortunately it is not possible to mock the Thymeleaf Template Engine (final methods problem) which is known and will be fixed in 3.0
+    //so all we test is that the endpoint is accessible.
+    mockMvc.perform(MockMvcRequestBuilders.get("/checkout/email")).andDo(print())
+        .andExpect(status().isOk());
+  }
+
+  private Product productBuilder() {
+    Product product = new Product();
+    product.setId(1L);
+    product.setDesc("TestDesc");
+    product.setName("TestName");
+    product.setPrice(new BigDecimal(1.99));
+    product.setQuantity(3);
+    product.setFullImageName("imagename");
+    product.setThumbImageName("imagename");
+    return product;
+  }
+
+  private Purchase purchaseBuilder(Product product) {
+    ProductPurchase pp = new ProductPurchase();
+    pp.setProductPurchaseId(1L);
+    pp.setQuantity(1);
+    pp.setProduct(product);
+    List<ProductPurchase> ppList = new ArrayList<ProductPurchase>();
+    ppList.add(pp);
+
+    Purchase purchase = new Purchase();
+    purchase.setId(1L);
+    purchase.setProductPurchases(ppList);
+    return purchase;
+  }
+
 }

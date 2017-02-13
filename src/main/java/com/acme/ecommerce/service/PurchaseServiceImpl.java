@@ -13,7 +13,7 @@ public class PurchaseServiceImpl implements PurchaseService {
 	private final PurchaseRepository repository;
 
 	@Autowired
-    public PurchaseServiceImpl(PurchaseRepository repository) {
+    	public PurchaseServiceImpl(PurchaseRepository repository) {
         this.repository = repository;
     }
 	
@@ -35,5 +35,4 @@ public class PurchaseServiceImpl implements PurchaseService {
 		
 		return result;
 	}
-
 }
